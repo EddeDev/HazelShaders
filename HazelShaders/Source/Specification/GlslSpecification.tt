@@ -1,0 +1,80 @@
+﻿﻿<#@ template debug="false" hostspecific="true" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#@ include file="Utils.t4" #>
+
+namespace HazelShaders
+{
+	using System;
+	using System.Collections.Generic;
+
+	public class GlslSpecification
+	{
+		public static readonly Dictionary<string, TokenType> KeywordToTokenTypeMap = Init();
+
+		public static TokenType KeywordToTokenType(string keyword)
+		{
+			if (KeywordToTokenTypeMap.TryGetValue(keyword, out TokenType tokenType))
+				return tokenType;
+			return TokenType.Identifier;
+		}
+
+		private static Dictionary<string, TokenType> Init()
+		{
+			char[] blanks = { ' ', '\n', '\r' };
+
+			string[] builtInConstants = @"<#=ReadFile("BuiltInConstants.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] builtInFunctions = @"<#=ReadFile("BuiltInFunctions.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] builtInVariables = @"<#=ReadFile("BuiltInVariables.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] qualifiers = @"<#=ReadFile("Qualifiers.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] types = @"<#=ReadFile("Types.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+
+			string[] additionalKeywords = { 
+				"vertex", 
+				"fragment", 
+				"compute", 
+				"geometry",
+
+				"struct"
+			};
+
+			string[] controlKeywords = {
+				"if",
+				"else",
+				"while",
+				"do",
+				"return",
+				"for",
+				"switch",
+				"case",
+				"break",
+				"continue",
+				"discard"
+			};
+
+			var tokenTypeToKeywords = new Dictionary<TokenType, IList<string[]>>();
+            // TODO: join?
+            tokenTypeToKeywords[TokenType.Keyword] = new List<string[]>() { qualifiers, types, additionalKeywords };
+            tokenTypeToKeywords[TokenType.Variable] = new List<string[]>() { builtInVariables, builtInConstants };
+            tokenTypeToKeywords[TokenType.Function] = new List<string[]>() { builtInFunctions };
+            tokenTypeToKeywords[TokenType.Statement] = new List<string[]>() { controlKeywords };
+
+            var result = new Dictionary<string, TokenType>();
+            foreach (var entry in tokenTypeToKeywords)
+			{
+				foreach (var keywords in entry.Value)
+				{
+					foreach (var keyword in keywords)
+						result[keyword] = entry.Key;
+				}
+			}
+			return result;
+		}
+
+		
+	}
+}

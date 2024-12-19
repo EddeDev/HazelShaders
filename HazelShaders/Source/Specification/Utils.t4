@@ -1,0 +1,6 @@
+﻿﻿<#+
+	string ReadFile(string path)
+	{
+		return File.ReadAllText(Host.ResolvePath(path));
+	}
+#>
