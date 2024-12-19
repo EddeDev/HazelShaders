@@ -1,6 +1,7 @@
 ﻿using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Operations;
 using Microsoft.VisualStudio.Utilities;
@@ -10,10 +11,10 @@ using System.ComponentModel.Composition;
 using System.Windows.Controls;
 using System.Windows.Documents;
 
-#pragma warning disable CS0618 // Type or member is obsolete
-
 namespace HazelShaders
 {
+#pragma warning disable CS0618
+
     [Export(typeof(IQuickInfoSourceProvider))]
     [Name("ToolTip QuickInfo Source")]
     [Order(Before = "Default Quick Info Presenter")]
@@ -25,25 +26,29 @@ namespace HazelShaders
         internal ITextStructureNavigatorSelectorService NavigatorService { get; set; }
 
         [Import]
-        internal ITextBufferFactoryService TextBufferFactoryService { get; set; }
+        private readonly IClassifierAggregatorService m_ClassifierAggregatorService = null;
 
         public IQuickInfoSource TryCreateQuickInfoSource(ITextBuffer textBuffer)
         {
-            return new GlslQuickInfoSource(this, textBuffer);
+            IClassifier classifier = m_ClassifierAggregatorService.GetClassifier(textBuffer);
+
+            return textBuffer.Properties.GetOrCreateSingletonProperty(() => new GlslQuickInfoSource(this, classifier, textBuffer));
         }
     }
 
     internal class GlslQuickInfoSource : IQuickInfoSource
     {
-        private GlslQuickInfoSourceProvider m_Provider;
-        private ITextBuffer m_SubjectBuffer;
-        private Dictionary<string, GlslFunctionInfo> m_Dictionary;
+        private readonly GlslQuickInfoSourceProvider m_Provider;
+        private readonly IClassifier m_Classifier;
+        private readonly ITextBuffer m_TextBuffer;
+        private readonly Dictionary<string, GlslFunctionInfo> m_Dictionary;
         private bool m_IsDisposed;
 
-        public GlslQuickInfoSource(GlslQuickInfoSourceProvider provider, ITextBuffer subjectBuffer)
+        public GlslQuickInfoSource(GlslQuickInfoSourceProvider provider, IClassifier classifier, ITextBuffer textBuffer)
         {
             m_Provider = provider;
-            m_SubjectBuffer = subjectBuffer;
+            m_Classifier = classifier;
+            m_TextBuffer = textBuffer;
 
             m_Dictionary = new Dictionary<string, GlslFunctionInfo>();
 
@@ -70,31 +75,28 @@ namespace HazelShaders
         public void AugmentQuickInfoSession(IQuickInfoSession session, IList<object> quickInfoContent, out ITrackingSpan applicableToSpan)
         {
             // Map the trigger point down to our buffer.
-            SnapshotPoint? subjectTriggerPoint = session.GetTriggerPoint(m_SubjectBuffer.CurrentSnapshot);
-            if (!subjectTriggerPoint.HasValue)
+            var triggerPoint = session.GetTriggerPoint(m_TextBuffer.CurrentSnapshot);
+            if (!triggerPoint.HasValue)
             {
                 applicableToSpan = null;
                 return;
             }
 
-            ITextSnapshot currentSnapshot = subjectTriggerPoint.Value.Snapshot;
-            SnapshotSpan querySpan = new SnapshotSpan(subjectTriggerPoint.Value, 0);
+            // TODO: m_Classifier.GetClassificationSpans()
 
-            //look for occurrences of our QuickInfo words in the span
-            ITextStructureNavigator navigator = m_Provider.NavigatorService.GetTextStructureNavigator(m_SubjectBuffer);
-            TextExtent extent = navigator.GetExtentOfWord(subjectTriggerPoint.Value);
-            string searchText = extent.Span.GetText();
+            var currentSnapshot = triggerPoint.Value.Snapshot;
+            var querySpan = new SnapshotSpan(triggerPoint.Value, 0);
+
+            var navigator = m_Provider.NavigatorService.GetTextStructureNavigator(m_TextBuffer);
+            var extent = navigator.GetExtentOfWord(triggerPoint.Value);
+            var searchText = extent.Span.GetText();
 
             foreach (string key in m_Dictionary.Keys)
             {
-                int foundIndex = searchText.IndexOf(key, StringComparison.CurrentCultureIgnoreCase);
+                var foundIndex = searchText.IndexOf(key, StringComparison.CurrentCultureIgnoreCase);
                 if (foundIndex > -1)
                 {
-                    applicableToSpan = currentSnapshot.CreateTrackingSpan
-                    (
-                        //querySpan.Start.Add(foundIndex).Position, 9, SpanTrackingMode.EdgeInclusive
-                        extent.Span.Start + foundIndex, key.Length, SpanTrackingMode.EdgeInclusive
-                    );
+                    applicableToSpan = currentSnapshot.CreateTrackingSpan(extent.Span.Start + foundIndex, key.Length, SpanTrackingMode.EdgeInclusive);
 
                     GlslFunctionInfo functionInfo;
                     m_Dictionary.TryGetValue(key, out functionInfo);
@@ -144,60 +146,57 @@ namespace HazelShaders
     [Export(typeof(IIntellisenseControllerProvider))]
     [Name("ToolTip QuickInfo Controller")]
     [ContentType(GlslContentTypes.GlslContentType)]
-    internal class GlslQuickInfoControllerProvider : IIntellisenseControllerProvider
+    internal class GlslIntellisenseControllerProvider : IIntellisenseControllerProvider
     {
         [Import]
         internal IQuickInfoBroker QuickInfoBroker { get; set; }
 
         public IIntellisenseController TryCreateIntellisenseController(ITextView textView, IList<ITextBuffer> subjectBuffers)
         {
-            return new GlslQuickInfoController(textView, subjectBuffers, this);
+            return new GlslIntellisenseController(textView, subjectBuffers, this);
         }
     }
 
-    internal class GlslQuickInfoController : IIntellisenseController
+    internal class GlslIntellisenseController : IIntellisenseController
     {
-        private ITextView m_textView;
-        private IList<ITextBuffer> m_subjectBuffers;
-        private GlslQuickInfoControllerProvider m_provider;
-        private IQuickInfoSession m_session;
+        private ITextView m_TextView;
+        private IList<ITextBuffer> m_SubjectBuffers;
+        private GlslIntellisenseControllerProvider m_Provider;
+        private IQuickInfoSession m_Session;
 
-        internal GlslQuickInfoController(ITextView textView, IList<ITextBuffer> subjectBuffers, GlslQuickInfoControllerProvider provider)
+        internal GlslIntellisenseController(ITextView textView, IList<ITextBuffer> subjectBuffers, GlslIntellisenseControllerProvider provider)
         {
-            m_textView = textView;
-            m_subjectBuffers = subjectBuffers;
-            m_provider = provider;
+            m_TextView = textView;
+            m_SubjectBuffers = subjectBuffers;
+            m_Provider = provider;
 
-            m_textView.MouseHover += this.OnTextViewMouseHover;
+            m_TextView.MouseHover += OnTextViewMouseHover;
         }
 
         public void Detach(ITextView textView)
         {
-            if (m_textView == textView)
+            if (m_TextView == textView)
             {
-                m_textView.MouseHover -= this.OnTextViewMouseHover;
-                m_textView = null;
+                m_TextView.MouseHover -= OnTextViewMouseHover;
+                m_TextView = null;
             }
         }
 
         private void OnTextViewMouseHover(object sender, MouseHoverEventArgs e)
         {
-            //find the mouse position by mapping down to the subject buffer
-            SnapshotPoint? point = m_textView.BufferGraph.MapDownToFirstMatch
-                 (new SnapshotPoint(m_textView.TextSnapshot, e.Position),
+            var point = m_TextView.BufferGraph.MapDownToFirstMatch
+                 (new SnapshotPoint(m_TextView.TextSnapshot, e.Position),
                 PointTrackingMode.Positive,
-                snapshot => m_subjectBuffers.Contains(snapshot.TextBuffer),
+                snapshot => m_SubjectBuffers.Contains(snapshot.TextBuffer),
                 PositionAffinity.Predecessor);
 
-            if (point != null)
+            if (point == null)
+                return;
+            
+            if (!m_Provider.QuickInfoBroker.IsQuickInfoActive(m_TextView))
             {
-                ITrackingPoint triggerPoint = point.Value.Snapshot.CreateTrackingPoint(point.Value.Position,
-                PointTrackingMode.Positive);
-
-                if (!m_provider.QuickInfoBroker.IsQuickInfoActive(m_textView))
-                {
-                    m_session = m_provider.QuickInfoBroker.TriggerQuickInfo(m_textView, triggerPoint, true);
-                }
+                var triggerPoint = point.Value.Snapshot.CreateTrackingPoint(point.Value.Position, PointTrackingMode.Positive);
+                m_Session = m_Provider.QuickInfoBroker.TriggerQuickInfo(m_TextView, triggerPoint, true);
             }
         }
 
@@ -209,6 +208,6 @@ namespace HazelShaders
         {
         }
     }
-}
 
 #pragma warning restore CS0618 // Type or member is obsolete
+}
