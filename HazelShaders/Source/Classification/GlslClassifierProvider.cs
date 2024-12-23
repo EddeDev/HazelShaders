@@ -1,7 +1,10 @@
-﻿using Microsoft.VisualStudio.Text;
+﻿using Microsoft.VisualStudio.Language.StandardClassification;
+using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Tagging;
 using Microsoft.VisualStudio.Utilities;
+using Microsoft.Win32;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 
 namespace HazelShaders
@@ -11,19 +14,49 @@ namespace HazelShaders
     [TagType(typeof(ClassificationTag))]
     internal class GlslClassifierProvider : IClassifierProvider
     {
-        [Import]
-        private IClassificationTypeRegistryService m_ClassificationRegistry;
-        
-        private GlslParser m_Parser;
+        public delegate void ChangedEventHandler(object sender);
+        public event ChangedEventHandler Changed;
 
-        public IClassifier GetClassifier(ITextBuffer buffer)
+        private readonly IClassificationTypeRegistryService m_ClassificationRegistry = null;
+        private readonly Dictionary<TokenType, IClassificationType> m_ClassificationTypes = new Dictionary<TokenType, IClassificationType>();
+
+        private readonly Tokenizer m_Tokenizer = new Tokenizer();
+
+        [ImportingConstructor]
+        public GlslClassifierProvider([Import] IClassificationTypeRegistryService registry)
         {
-            if (m_Parser == null)
-            {
-                m_Parser = new GlslParser(m_ClassificationRegistry);
-            }
+            m_ClassificationRegistry = registry;
 
-            return buffer.Properties.GetOrCreateSingletonProperty(() => new GlslClassifier(buffer, m_Parser));
+            m_ClassificationTypes[TokenType.Comment] = registry.GetClassificationType(PredefinedClassificationTypeNames.Comment);
+            m_ClassificationTypes[TokenType.Identifier] = registry.GetClassificationType(PredefinedClassificationTypeNames.Identifier);
+            m_ClassificationTypes[TokenType.Operator] = registry.GetClassificationType(PredefinedClassificationTypeNames.Operator);
+            m_ClassificationTypes[TokenType.QuotedString] = registry.GetClassificationType(PredefinedClassificationTypeNames.String);
+            m_ClassificationTypes[TokenType.Number] = registry.GetClassificationType(PredefinedClassificationTypeNames.Number);
+            m_ClassificationTypes[TokenType.PreprocessorKeyword] = registry.GetClassificationType(PredefinedClassificationTypeNames.PreprocessorKeyword);
+
+            m_ClassificationTypes[TokenType.Keyword] = registry.GetClassificationType(GlslClassificationTypes.Keyword);
+            m_ClassificationTypes[TokenType.Function] = registry.GetClassificationType(GlslClassificationTypes.Function);
+            m_ClassificationTypes[TokenType.Variable] = registry.GetClassificationType(GlslClassificationTypes.Variable);
+            m_ClassificationTypes[TokenType.Statement] = registry.GetClassificationType(GlslClassificationTypes.Statement);
+        }
+
+        public IClassifier GetClassifier(ITextBuffer textBuffer)
+        {
+            return textBuffer.Properties.GetOrCreateSingletonProperty(() => new GlslClassifier(this, textBuffer));
+        }
+
+        public IList<ClassificationSpan> CalculateSpans(SnapshotSpan span)
+        {
+            IList<ClassificationSpan> classificationSpans = new List<ClassificationSpan>();
+            string source = span.GetText();
+            var tokens = m_Tokenizer.Tokenize(source);
+            foreach (var token in tokens)
+            {
+                var lineSpan = new SnapshotSpan(span.Snapshot, token.Start, token.Length);
+                var classificationType = m_ClassificationTypes[token.Type];
+                classificationSpans.Add(new ClassificationSpan(lineSpan, classificationType));
+            }
+            return classificationSpans;
         }
     }
 }

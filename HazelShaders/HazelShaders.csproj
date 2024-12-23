@@ -48,14 +48,17 @@
     <Compile Include="HazelShadersPackage.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Source\Classification\GlslClassifier.cs" />
-    <Compile Include="Source\Classification\GlslClassifierFormat.cs" />
+    <Compile Include="Source\Classification\GlslClassificationFormats.cs" />
     <Compile Include="Source\Classification\GlslClassifierProvider.cs" />
-    <Compile Include="Source\Classification\GlslClassifierTypes.cs" />
+    <Compile Include="Source\Classification\GlslClassificationTypes.cs" />
     <Compile Include="Source\Classification\GlslContentTypes.cs" />
-    <Compile Include="Source\Classification\GlslParser.cs" />
-    <Compile Include="Source\Completion\GlslCompletion.cs" />
-    <Compile Include="Source\Completion\GlslCompletionSource.cs" />
-    <Compile Include="Source\Completion\GlslCompletionSourceProvider.cs" />
+    <Compile Include="Source\Compilation\ShaderPreprocessor.cs" />
+    <Compile Include="Source\Compilation\ShaderStage.cs" />
+    <Compile Include="Source\Compilation\ErrorTagger.cs" />
+    <Compile Include="Source\Compilation\ErrorTaggerProvider.cs" />
+    <Compile Include="Source\Intellisense\GlslCompletionController.cs" />
+    <Compile Include="Source\Intellisense\GlslCompletionSource.cs" />
+    <Compile Include="Source\Intellisense\GlslCompletionSourceProvider.cs" />
     <Compile Include="Source\Specification\GlslFunctions.cs" />
     <Compile Include="Source\Specification\GlslSpecification.cs">
       <AutoGen>True</AutoGen>
@@ -71,7 +74,7 @@
     <Compile Include="Source\TodoClassification\TodoTaggerProvider.cs" />
     <Compile Include="Source\Tokenizer\Token.cs" />
     <Compile Include="Source\Tokenizer\Tokenizer.cs" />
-    <Compile Include="Source\Tooltips\QuickInfoSource.cs" />
+    <Compile Include="Source\Intellisense\GlslQuickInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="source.extension.vsixmanifest">
@@ -111,6 +114,10 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="HazelShaders_Logo_V1.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
     <Content Include="Source\Specification\BuiltInConstants.txt" />
     <Content Include="Source\Specification\BuiltInFunctions.txt" />
     <Content Include="Source\Specification\BuiltInVariables.txt" />

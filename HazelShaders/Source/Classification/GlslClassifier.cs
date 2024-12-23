@@ -8,33 +8,33 @@ namespace HazelShaders
 {
     internal class GlslClassifier : IClassifier
     {
+        private readonly GlslClassifierProvider m_Provider;
+        
         private IList<ClassificationSpan> m_Spans = new List<ClassificationSpan>();
         private readonly object m_SpansLock = new object();
 
-        private GlslParser m_Parser;
-
-        internal GlslClassifier(ITextBuffer buffer, GlslParser parser)
+        internal GlslClassifier(GlslClassifierProvider provider, ITextBuffer textBuffer)
         {
-            m_Parser = parser;
+            m_Provider = provider;
 
-            var observableSnapshot = Observable.Return(buffer.CurrentSnapshot).Concat(
-                Observable.FromEventPattern<TextContentChangedEventArgs>(eventHandler => buffer.Changed += eventHandler, eventHandler => buffer.Changed -= eventHandler)
+            var observableSnapshot = Observable.Return(textBuffer.CurrentSnapshot).Concat(
+                Observable.FromEventPattern<TextContentChangedEventArgs>(eventHandler => textBuffer.Changed += eventHandler, eventHandler => textBuffer.Changed -= eventHandler)
                 .Select(eventPattern => eventPattern.EventArgs.After));
 
-            parser.Changed += eventHandler => UpdateSpans(buffer);
+            provider.Changed += eventHandler => UpdateSpans(textBuffer);
 
-            observableSnapshot.Throttle(TimeSpan.FromSeconds(0.3f));
-            observableSnapshot.Subscribe(snapshot => UpdateSpans(buffer));
+            observableSnapshot.Throttle(TimeSpan.FromMilliseconds(300.0f));
+            observableSnapshot.Subscribe(snapshot => UpdateSpans(textBuffer));
         }
 
         public event EventHandler<ClassificationChangedEventArgs> ClassificationChanged;
 
-        private void UpdateSpans(ITextBuffer buffer)
+        private void UpdateSpans(ITextBuffer textBuffer)
         {
-            var snapshotSpan = new SnapshotSpan(buffer.CurrentSnapshot, 0, buffer.CurrentSnapshot.Length);
+            var snapshotSpan = new SnapshotSpan(textBuffer.CurrentSnapshot, 0, textBuffer.CurrentSnapshot.Length);
             lock (m_SpansLock)
             {
-                m_Spans = m_Parser.CalculateSpans(snapshotSpan);
+                m_Spans = m_Provider.CalculateSpans(snapshotSpan);
             }
 
             ClassificationChanged?.Invoke(this, new ClassificationChangedEventArgs(snapshotSpan));

@@ -10,10 +10,12 @@ namespace HazelShaders
         private static readonly Parser<Token> Comment = from value in new CommentParser().AnyComment
                                                         select new Token(TokenType.Comment, value);
 
+        // #stage vertex
+        // private static readonly Parser<PreprocessorDirectiveType> Define = Parse.String("#define").Token().Return(PreprocessorDirectiveType.Define);
         private static readonly Parser<Token> Preprocessor = from open in Parse.Char('#').Token()
-                                                             from identifier in Parse.Letter.Once().Text().Then(first => Parse.LetterOrDigit.Many().Text().Select(rest => first + rest))
-                                                             from replacement in Parse.CharExcept("\"\r\n").Many().Text().Token()
-                                                             select new PreprocessorToken(identifier, replacement);
+                                                             from type in Parse.Identifier(Parse.Letter, Parse.LetterOrDigit).Token()
+                                                             // from value in Parse.AnyChar.Except(Parse.LineEnd).Many().Text().Token().Optional()
+                                                             select new Token(TokenType.PreprocessorKeyword, type);
 
         private static readonly Parser<Token> QuotedString = from open in Parse.Char('"')
                                                              from value in Parse.CharExcept("\"\r\n").Many().Text()

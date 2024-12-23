@@ -1,4 +1,5 @@
 ﻿using Sprache;
+using System.Diagnostics;
 
 namespace HazelShaders
 {
@@ -46,15 +47,39 @@ namespace HazelShaders
         }
     }
 
+    /*
+    enum PreprocessorDirectiveType
+    {
+        None = 0,
+
+        // Macros
+        Define,
+
+        // File inclusion
+        IncludeAbsolute,
+        IncludeRelative,
+
+        // Conditional compilation
+        Ifdef,
+        Endif,
+        If,
+        Else,
+        Ifndef,
+        Undef,
+
+        // Example: #stage fragment or #stage compute
+        Stage
+    }
+
     internal class PreprocessorToken : Token
     {
-        public string Identifier { get; private set; }
-        public string Replacement { get; private set; }
+        public string DirectiveType { get; private set; }
 
-        public PreprocessorToken(string identifier, string replacement) : base(TokenType.PreprocessorKeyword, identifier /*TODO*/)
+        public PreprocessorToken(string type, string value) : base(TokenType.PreprocessorKeyword, value)
         {
-            Identifier = identifier;
-            Replacement = replacement;
+            Debug.WriteLine($"Creating PreprocessorToken (type={type}, value={value})");
+            DirectiveType = type;
         }
     }
+    */
 }

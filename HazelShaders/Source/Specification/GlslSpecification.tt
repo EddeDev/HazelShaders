@@ -14,11 +14,11 @@ namespace HazelShaders
 
 	public class GlslSpecification
 	{
-		public static readonly Dictionary<string, TokenType> KeywordToTokenTypeMap = Init();
+		public static readonly Dictionary<string, TokenType> KeywordMap = Init();
 
 		public static TokenType KeywordToTokenType(string keyword)
 		{
-			if (KeywordToTokenTypeMap.TryGetValue(keyword, out TokenType tokenType))
+			if (KeywordMap.TryGetValue(keyword, out TokenType tokenType))
 				return tokenType;
 			return TokenType.Identifier;
 		}
