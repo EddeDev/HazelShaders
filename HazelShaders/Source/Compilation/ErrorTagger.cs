@@ -57,7 +57,7 @@ namespace HazelShaders
             Debug.WriteLine($"Creating ErrorTagger for: {m_FilePath}");
         }
 
-        private static int WhiteSpaceAtBegin(string str)
+        private static int WhiteSpaceAtStart(string str)
         {
             int count = 0;
             int ix = 0;
@@ -130,18 +130,9 @@ namespace HazelShaders
                         process.WaitForExit();
 
                         GlslValidatorFailCode failCode = (GlslValidatorFailCode)process.ExitCode;
-
                         if (failCode == GlslValidatorFailCode.Success)
-                        {
-                            Debug.WriteLine($"[Hazel Shaders] Successfully compiled {stage.ToString().ToLower()} shader");
                             continue;
-                        }
-
-                        if (failCode == GlslValidatorFailCode.FailCompile)
-                            Debug.WriteLine($"[Hazel Shaders] Failed to compile {stage.ToString().ToLower()} shader.\nFail Code: {failCode.ToString()}\nOutput Data: {outputData}");
-                        else
-                            Debug.Assert(false);
-
+                            
                         var lines = outputData.ToString().Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var line in lines)
                         {
@@ -149,6 +140,8 @@ namespace HazelShaders
                                 continue;
 
                             var match = Regex.Match(line, @"(WARNING|ERROR):\s+(\d|.*):(\d+):\s+(.*)");
+
+                            Dictionary<SnapshotSpan, string> errorMessages = new Dictionary<SnapshotSpan, string>();
 
                             if (match.Groups.Count == 5)
                             {
@@ -162,20 +155,41 @@ namespace HazelShaders
                                 var snapshotLine = snapshot.GetLineFromLineNumber(errorLine - 1 + stageStartLine);
                                 string lineString = snapshotLine.GetText();
 
-                                int begin = WhiteSpaceAtBegin(lineString);
-                                int end = WhiteSpaceAtEnd(lineString);
-                                SnapshotSpan tagSpan = new SnapshotSpan(snapshot, snapshotLine.Start + begin, snapshotLine.Length - end);
+                                int wsStart = WhiteSpaceAtStart(lineString);
+                                int wsEnd = WhiteSpaceAtEnd(lineString);
+                                SnapshotSpan tagSpan = new SnapshotSpan(snapshot, snapshotLine.Start + wsStart, snapshotLine.Length - wsEnd);
 
-                                ThreadHelper.JoinableTaskFactory.Run(async delegate
+                                if (errorMessages.ContainsKey(tagSpan))
                                 {
-                                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                                    TextBlock toolTipContent = new TextBlock();
-                                    toolTipContent.Inlines.Add(new Run("Test"));
-
-                                    m_Tags.Add(new TagSpan<IErrorTag>(tagSpan, new ErrorTag(PredefinedErrorTypeNames.SyntaxError)));
-                                });
+                                    errorMessages[tagSpan] += Environment.NewLine;
+                                    errorMessages[tagSpan] += message;
+                                }
+                                else
+                                {
+                                    errorMessages.Add(tagSpan, message);
+                                }
                             }
+
+#if false
+                            ThreadHelper.JoinableTaskFactory.Run(async delegate
+                            {
+                                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                                TextBlock toolTipContent = new TextBlock();
+                                toolTipContent.Inlines.Add(new Run("Test"));
+
+                                m_Tags.Add(new TagSpan<IErrorTag>(tagSpan, new ErrorTag(PredefinedErrorTypeNames.SyntaxError, toolTipContent)));
+                            });
+#else
+                            foreach (var kvp in errorMessages)
+                            {
+                                var tagSpan = kvp.Key;
+                                var message = kvp.Value;
+
+                                // TODO: add support for warnings
+                                m_Tags.Add(new TagSpan<IErrorTag>(tagSpan, new ErrorTag(PredefinedErrorTypeNames.SyntaxError, message)));
+                            }
+#endif
                         }
                     }
                 }

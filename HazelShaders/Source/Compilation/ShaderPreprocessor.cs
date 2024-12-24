@@ -42,7 +42,12 @@ namespace HazelShaders
                     {
                         int start = classificationSpan.Span.Start + StageToken.Length;
                         int nextNewLine = shaderSource.IndexOf(Environment.NewLine, start);
+                        if (nextNewLine == -1)
+                            continue;
+
                         int length = nextNewLine - start;
+                        if (length == 0)
+                            continue;
 
                         string stageString = shaderSource.Substring(start, length).Trim();
                         if (stageString.Length == 0)
