@@ -8,6 +8,7 @@ using Microsoft.VisualStudio.Utilities;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Documents;
 

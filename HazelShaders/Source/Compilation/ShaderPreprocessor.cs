@@ -11,97 +11,166 @@ using Microsoft.VisualStudio.Language.StandardClassification;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text;
 using System.Diagnostics;
+using System.IO;
+using Microsoft.ServiceHub.Resources;
+using System.Windows.Media;
 
 namespace HazelShaders
 {
     using ShaderSourceMap = Dictionary<ShaderStage, string>;
 
+    struct ShaderStageToken
+    {
+        public ShaderStage Stage;
+        public int Start;
+        public int Length;
+
+        public ShaderStageToken(ShaderStage stage, int start, int length)
+        {
+            Stage = stage;
+            Start = start;
+            Length = length;
+        }
+    }
+
     internal class ShaderPreprocessor
     {
         private const string StageToken = "#stage";
 
-        public static ShaderSourceMap Preprocess(ITextSnapshot snapshot, IClassifier classifier, out Dictionary<ShaderStage, SnapshotSpan> outStageTokenPositions)
+
+        /*
+        // Preprocess shader source using glslangValidator
+        public static string GlslangPreprocess(ITextSnapshot snapshot, IList<ClassificationSpan> classificationSpans)
         {
-            var shaderSource = snapshot.GetText();
+            var sources = new ShaderSourceMap(); // Preprocess(snapshot, classificationSpans, out var stageTokenPositions);
 
-            var snapshotSpan = new SnapshotSpan(snapshot, 0, snapshot.Length);
-            var classificationSpans = classifier.GetClassificationSpans(snapshotSpan);
 
-            var stageTokenPositions = new List<KeyValuePair<ShaderStage, SnapshotSpan>>();
-            foreach (var classificationSpan in classificationSpans)
+
+
+            var outputSources = new ShaderSourceMap();
+
+            foreach (var entry in sources)
             {
-                if (classificationSpan.ClassificationType.IsOfType(PredefinedClassificationTypeNames.PreprocessorKeyword))
+                var stage = entry.Key;
+                var stageSource = entry.Value;
+
+                string stageSourceTempFile = Path.GetTempFileName();
+                File.WriteAllText(stageSourceTempFile, stageSource);
+
+                var process = new Process
                 {
-                    var tokenSpan = new SnapshotSpan(snapshot, classificationSpan.Span);
-                    var tokenText = tokenSpan.GetText();
-
-                    // TODO: this substring should already be tokenized/trimmed
-                    tokenText = tokenText.Trim();
-
-                    if (tokenText == StageToken)
+                    StartInfo = new ProcessStartInfo
                     {
-                        int start = classificationSpan.Span.Start + StageToken.Length;
-                        int nextNewLine = shaderSource.IndexOf(Environment.NewLine, start);
-                        if (nextNewLine == -1)
-                            continue;
-
-                        int length = nextNewLine - start;
-                        if (length == 0)
-                            continue;
-
-                        string stageString = shaderSource.Substring(start, length).Trim();
-                        if (stageString.Length == 0)
-                            continue;
-
-                        stageString = stageString.ToLower();
-                        char firstChar = Char.ToUpper(stageString[0]);
-                        stageString = stageString.Remove(0, 1).Insert(0, firstChar.ToString());
-
-                        if (!Enum.TryParse<ShaderStage>(stageString, out var stage))
-                            continue;
-
-                        SnapshotSpan span = new SnapshotSpan(classificationSpan.Span.Start, nextNewLine - classificationSpan.Span.Start);
-                        stageTokenPositions.Add(new KeyValuePair<ShaderStage, SnapshotSpan>(stage, span));
+                        FileName = "glslangValidator",
+                        Arguments = "",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
                     }
-                }
+                };
+                process.Start();
+                process.WaitForExit();
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+
+                File.Delete(stageSourceTempFile);
+
+                outputSources.Add(stage, output);
             }
 
-            stageTokenPositions = stageTokenPositions.OrderBy(x => x.Value.Start).ToList();
-
-            ShaderSourceMap sources = new ShaderSourceMap();
-            for (int i = 0; i < stageTokenPositions.Count; i++)
+            StringBuilder sb = new StringBuilder();
+            foreach (var entry in outputSources)
             {
-                ShaderStage stage = stageTokenPositions[i].Key;
+                sb.Append(entry.Value);
+            }
+            return sb.ToString();
+        }
+        */
 
-                int begin = stageTokenPositions[i].Value.End;
-                int end = i < stageTokenPositions.Count - 1 ? stageTokenPositions[i + 1].Value.Start : shaderSource.Length;
 
-                string stageSource = shaderSource.Substring(begin, end - begin);
 
-                // Replace with UNIX line endings
-                stageSource = stageSource.Replace("\r\n", "\n");
-
-                // Remove all multiline comments and replace them with empty lines
-                while (true)
+        /*
+        private static string ProcessIncludes(string input, string includeDir)
+        {
+            var lines = input.Split(new char[] { '\n' }, StringSplitOptions.None);
+            string output = input;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                Regex includeRegex = new Regex(@"#include\s*[""<](.*?)["">]");
+                var match = includeRegex.Match(line);
+                if (match.Success)
                 {
-                    // Regex regex = new Regex(@"/\\*(.|[\\r\\n])*?\\*/");
-                    Regex regex = new Regex(@"/\*(.|[\r\n])*?\*/");
-                    Match match = regex.Match(stageSource);
-                    if (!match.Success)
-                        break;
-
-                    int numLineEndings = match.Value.Count(c => c == '\n');
-                    stageSource = stageSource.Replace(match.Value, new string('\n', numLineEndings));
+                    var filepath = match.Groups[1].Value;
+                    string includePath = Path.Combine(includeDir, filepath);
+                    string directoryName = Path.GetDirectoryName(includePath);
+                    string includeContent = ProcessIncludes(File.ReadAllText(includePath), directoryName);
+                    output = output.Replace(match.Value, includeContent + "\n" + $"#line {i + 1}");
                 }
+            }
+            return output;
+        }
+        */
 
-                // Remove all line comments and replace them with empty lines
-                stageSource = Regex.Replace(stageSource, "//.*", string.Empty);
+        public static ShaderSourceMap RemoveCommentsAndSplitSourceCode(string shaderSource, out Dictionary<ShaderStage, ShaderStageToken> outStageTokens)
+        {
+            // Replace with UNIX line endings
+            shaderSource = shaderSource.Replace("\r\n", " \n");
 
+            // Remove all multiline comments and replace them with empty lines
+            while (true)
+            {
+                // Regex regex = new Regex(@"/\\*(.|[\\r\\n])*?\\*/");
+                Regex regex = new Regex(@"/\*(.|[\r\n])*?\*/");
+                Match match = regex.Match(shaderSource);
+                if (!match.Success)
+                    break;
+
+                string comment = match.Value;
+                int numLineEndings = comment.Count(c => c == '\n');
+                string replacement = string.Concat(comment.Select(c => c == '\n' ? '\n' : ' '));
+                shaderSource = shaderSource.Replace(comment, replacement);
+            }
+
+            // Remove all line comments with whitespace
+            shaderSource = Regex.Replace(shaderSource, "//.*", match => new string(' ', match.Length));
+
+            outStageTokens = new Dictionary<ShaderStage, ShaderStageToken>();
+
+            var sources = new ShaderSourceMap();
+
+            int stageTokenPos = shaderSource.IndexOf(StageToken);
+            while (stageTokenPos != -1)
+            {
+                int eol = shaderSource.FindFirstOf("\n", stageTokenPos);
+                if (eol == -1)
+                    break;
+
+                int begin = stageTokenPos + StageToken.Length;
+                string stageString = shaderSource.Substring(begin, eol - begin);
+                stageString = stageString.Trim();
+
+                stageString = stageString.ToLower();
+                char firstChar = Char.ToUpper(stageString[0]);
+                stageString = stageString.Remove(0, 1).Insert(0, firstChar.ToString());
+
+                if (!Enum.TryParse<ShaderStage>(stageString, out var stage))
+                    continue;
+
+                int nextLinePos = shaderSource.FindFirstNotOf("\n", eol);
+
+                // Add token to dictionary
+                outStageTokens.Add(stage, new ShaderStageToken(stage, stageTokenPos, eol - 1 - stageTokenPos));
+
+                stageTokenPos = shaderSource.IndexOf(StageToken, nextLinePos);
+
+                int end = stageTokenPos != -1 ? stageTokenPos : shaderSource.Length;
+
+                string stageSource = shaderSource.Substring(eol, end - eol);
                 sources.Add(stage, stageSource);
             }
 
-            outStageTokenPositions = stageTokenPositions.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            
             return sources;
         }
     }

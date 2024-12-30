@@ -54,25 +54,7 @@ namespace HazelShaders
             const float compileDelay = 200.0f;
             observableSnapshot.Throttle(TimeSpan.FromMilliseconds(compileDelay)).Subscribe(snapshot => OnSourceCodeChanged(snapshot));
 
-            Debug.WriteLine($"Creating ErrorTagger for: {m_FilePath}");
-        }
-
-        private static int WhiteSpaceAtStart(string str)
-        {
-            int count = 0;
-            int ix = 0;
-            while (Char.IsWhiteSpace(str[ix++]) && ix < str.Length)
-                count++;
-            return count;
-        }
-
-        private static int WhiteSpaceAtEnd(string str)
-        {
-            int count = 0;
-            int ix = str.Length - 1;
-            while (Char.IsWhiteSpace(str[ix--]) && ix >= 0)
-                count++;
-            return count;
+            // Debug.WriteLine($"Creating ErrorTagger for: {m_FilePath}");
         }
 
         private void OnSourceCodeChanged(ITextSnapshot snapshot)
@@ -81,11 +63,7 @@ namespace HazelShaders
             m_Tags.Clear();
 
             var shaderSource = snapshot.GetText();
-
-            Debug.WriteLine($"[Hazel Shaders] Preprocessing shader '{m_FilePath}'...");
-            var sources = ShaderPreprocessor.Preprocess(snapshot, m_Classifier, out var stageTokenPositions);
-
-            Debug.WriteLine($"[Hazel Shaders] Compiling shader '{m_FilePath}'...");
+            var sources = ShaderPreprocessor.RemoveCommentsAndSplitSourceCode(shaderSource, out var stageTokens);
 
             string vulkanSdkPathStr = Environment.GetEnvironmentVariable("VULKAN_SDK");
             string glslangValidatorPath = Path.Combine(vulkanSdkPathStr, "Bin/glslangValidator.exe");
@@ -106,8 +84,35 @@ namespace HazelShaders
                 {
                     using (Process process = new Process())
                     {
+
+                        string filepath = null;
+                        if (snapshot.TextBuffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument document))
+                            filepath = document.FilePath;
+                        var includeDir = Path.GetDirectoryName(filepath);
+
+                        const bool printPreprocessedGlsl = false;
+
+                        StringBuilder argsBuilder = new StringBuilder();
+                        argsBuilder.Append("--stdin ");
+                        argsBuilder.Append($"-S {stageString} ");
+                        argsBuilder.Append($"-I{includeDir} ");
+
+                        if (printPreprocessedGlsl)
+                        {
+                            argsBuilder.Append("-E ");
+                        }
+                        else
+                        {
+                            argsBuilder.Append("--client vulkan100 ");
+                            argsBuilder.Append("-Od ");
+                            argsBuilder.Append(" --keep-uncalled ");
+                        }
+
+                        // Enable include directives
+                        argsBuilder.Append("-P\"#extension GL_GOOGLE_include_directive : enable\n\"");
+
                         process.StartInfo.FileName = glslangValidatorPath;
-                        process.StartInfo.Arguments = $"--stdin -S {stageString} --client vulkan100 -Od --keep-uncalled";
+                        process.StartInfo.Arguments = argsBuilder.ToString();
                         process.StartInfo.RedirectStandardInput = true;
                         process.StartInfo.RedirectStandardError = true;
                         process.StartInfo.RedirectStandardOutput = true;
@@ -130,6 +135,10 @@ namespace HazelShaders
                         process.WaitForExit();
 
                         GlslValidatorFailCode failCode = (GlslValidatorFailCode)process.ExitCode;
+                        if (failCode != GlslValidatorFailCode.Success && failCode != GlslValidatorFailCode.FailCompile)
+                            Debug.Assert(false);
+                        if (failCode == GlslValidatorFailCode.FailUsage)
+                            Debug.WriteLine($"FAIL USAGE ({errorData.ToString()}) ({outputData.ToString()})");
                         if (failCode == GlslValidatorFailCode.Success)
                             continue;
                             
@@ -139,6 +148,9 @@ namespace HazelShaders
                             if (line == "stdin")
                                 continue;
 
+                            if (line.EndsWith(": compilation terminated "))
+                                continue;
+
                             var match = Regex.Match(line, @"(WARNING|ERROR):\s+(\d|.*):(\d+):\s+(.*)");
 
                             Dictionary<SnapshotSpan, string> errorMessages = new Dictionary<SnapshotSpan, string>();
@@ -146,41 +158,55 @@ namespace HazelShaders
                             if (match.Groups.Count == 5)
                             {
                                 var errorLine = Convert.ToInt32(match.Groups[3].Value);
-                                var message = match.Groups[4].Value;
-                                Debug.WriteLine($"{errorLine}: {message}");
+                                var message = match.Groups[4].Value.Trim();
 
-                                stageTokenPositions.TryGetValue(stage, out var stageTokenSpan);
-                                var stageStartLine = stageTokenSpan.Snapshot.GetLineNumberFromPosition(stageTokenSpan.Start.Position);
+                                stageTokens.TryGetValue(stage, out var stageToken);
+                                var stageStartLine = snapshot.GetLineNumberFromPosition(stageToken.Start);
 
-                                var snapshotLine = snapshot.GetLineFromLineNumber(errorLine - 1 + stageStartLine);
+                                var snapshotLine = snapshot.GetLineFromLineNumber((stageStartLine + errorLine) - 1);
                                 string lineString = snapshotLine.GetText();
 
-                                int wsStart = WhiteSpaceAtStart(lineString);
-                                int wsEnd = WhiteSpaceAtEnd(lineString);
-                                SnapshotSpan tagSpan = new SnapshotSpan(snapshot, snapshotLine.Start + wsStart, snapshotLine.Length - wsEnd);
-
-                                if (errorMessages.ContainsKey(tagSpan))
+                                var undeclaredIdentifierMatch = Regex.Match(message, @"'(?<identifier>.*?)'\s:\s*(?<error>undeclared identifier)");
+                                if (undeclaredIdentifierMatch.Success)
                                 {
-                                    errorMessages[tagSpan] += Environment.NewLine;
-                                    errorMessages[tagSpan] += message;
+                                    string identifier = undeclaredIdentifierMatch.Groups["identifier"].Value;
+
+                                    string pattern = @"\b" + identifier + @"\b";
+
+                                    var identifierMatches = Regex.Matches(lineString, pattern);
+                                    // TODO
+                                    foreach (Match identifierMatch in identifierMatches)
+                                    {
+                                        var tagSpan = new SnapshotSpan(snapshot, snapshotLine.Start + identifierMatch.Index, identifierMatch.Length);
+                                        if (errorMessages.ContainsKey(tagSpan))
+                                        {
+                                            errorMessages[tagSpan] += Environment.NewLine;
+                                            errorMessages[tagSpan] += message;
+                                        }
+                                        else
+                                        {
+                                            errorMessages.Add(tagSpan, message);
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    errorMessages.Add(tagSpan, message);
+                                    int wsStart = lineString.WhiteSpaceAtStart();
+                                    int wsEnd = lineString.WhiteSpaceAtEnd();
+                                    SnapshotSpan tagSpan = new SnapshotSpan(snapshot, snapshotLine.Start + wsStart, snapshotLine.Length - wsEnd);
+
+                                    if (errorMessages.ContainsKey(tagSpan))
+                                    {
+                                        errorMessages[tagSpan] += Environment.NewLine;
+                                        errorMessages[tagSpan] += message;
+                                    }
+                                    else
+                                    {
+                                        errorMessages.Add(tagSpan, message);
+                                    }
                                 }
                             }
 
-#if false
-                            ThreadHelper.JoinableTaskFactory.Run(async delegate
-                            {
-                                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                                TextBlock toolTipContent = new TextBlock();
-                                toolTipContent.Inlines.Add(new Run("Test"));
-
-                                m_Tags.Add(new TagSpan<IErrorTag>(tagSpan, new ErrorTag(PredefinedErrorTypeNames.SyntaxError, toolTipContent)));
-                            });
-#else
                             foreach (var kvp in errorMessages)
                             {
                                 var tagSpan = kvp.Key;
@@ -189,7 +215,6 @@ namespace HazelShaders
                                 // TODO: add support for warnings
                                 m_Tags.Add(new TagSpan<IErrorTag>(tagSpan, new ErrorTag(PredefinedErrorTypeNames.SyntaxError, message)));
                             }
-#endif
                         }
                     }
                 }

@@ -1,8 +1,12 @@
 ﻿using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Classification;
+using Sprache;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Reactive.Linq;
+using System.Windows.Documents;
 
 namespace HazelShaders
 {

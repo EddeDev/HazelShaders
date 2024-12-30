@@ -9,12 +9,15 @@ namespace HazelShaders
         PreprocessorKeyword,
         QuotedString,
         Number,
+
+        // TODO: WIP
+        Function,
+        
         Identifier,
         Operator,
 
         Keyword,
         Variable,
-        Function,
         Statement
     }
 
@@ -47,7 +50,26 @@ namespace HazelShaders
         }
     }
 
-    /*
+    struct FunctionParameter
+    {
+        public string Type;
+        public string Name;
+    }
+
+    internal class FunctionToken : Token
+    {
+        public string ReturnType { get; private set; }
+        public string Name { get; private set; }
+        public FunctionParameter[] Parameters { get; private set; }
+
+        public FunctionToken(string returnType, string name, FunctionParameter[] parameters) : base(TokenType.Function, name)
+        {
+            ReturnType = returnType;
+            Name = name;
+            Parameters = parameters;
+        }
+    }
+
     enum PreprocessorDirectiveType
     {
         None = 0,
@@ -77,9 +99,8 @@ namespace HazelShaders
 
         public PreprocessorToken(string type, string value) : base(TokenType.PreprocessorKeyword, value)
         {
-            Debug.WriteLine($"Creating PreprocessorToken (type={type}, value={value})");
+            // Debug.WriteLine($"Creating PreprocessorToken (type={type}, value={value})");
             DirectiveType = type;
         }
     }
-    */
 }

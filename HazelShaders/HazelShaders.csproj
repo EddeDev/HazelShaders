@@ -52,6 +52,7 @@
     <Compile Include="Source\Classification\GlslClassifierProvider.cs" />
     <Compile Include="Source\Classification\GlslClassificationTypes.cs" />
     <Compile Include="Source\Classification\GlslContentTypes.cs" />
+    <Compile Include="Source\Classification\ShaderCache.cs" />
     <Compile Include="Source\Compilation\ShaderPreprocessor.cs" />
     <Compile Include="Source\Compilation\ShaderStage.cs" />
     <Compile Include="Source\Compilation\ErrorTagger.cs" />
@@ -75,6 +76,7 @@
     <Compile Include="Source\Tokenizer\Token.cs" />
     <Compile Include="Source\Tokenizer\Tokenizer.cs" />
     <Compile Include="Source\Intellisense\GlslQuickInfo.cs" />
+    <Compile Include="Source\Utils\StringUtils.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="source.extension.vsixmanifest">

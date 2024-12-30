@@ -1,11 +1,18 @@
 ﻿using Microsoft.VisualStudio.Language.StandardClassification;
 using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Adornments;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Tagging;
 using Microsoft.VisualStudio.Utilities;
 using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Linq;
 
 namespace HazelShaders
 {
@@ -52,9 +59,9 @@ namespace HazelShaders
             var tokens = m_Tokenizer.Tokenize(source);
             foreach (var token in tokens)
             {
-                var lineSpan = new SnapshotSpan(span.Snapshot, token.Start, token.Length);
+                var tokenSpan = new SnapshotSpan(span.Snapshot, token.Start, token.Length);
                 var classificationType = m_ClassificationTypes[token.Type];
-                classificationSpans.Add(new ClassificationSpan(lineSpan, classificationType));
+                classificationSpans.Add(new ClassificationSpan(tokenSpan, classificationType));
             }
             return classificationSpans;
         }

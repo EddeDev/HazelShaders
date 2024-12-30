@@ -16,7 +16,12 @@ namespace HazelShaders
 			return TokenType.Identifier;
 		}
 
-		private static Dictionary<string, TokenType> Init()
+		public static void AddKeyword(string keyword, TokenType tokenType)
+        {
+            KeywordMap.Add(keyword, tokenType);
+        }
+
+        private static Dictionary<string, TokenType> Init()
 		{
 			char[] blanks = { ' ', '\n', '\r' };
 
