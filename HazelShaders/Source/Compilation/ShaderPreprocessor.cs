@@ -35,6 +35,7 @@ namespace HazelShaders
 
     internal class ShaderPreprocessor
     {
+        // TODO: there might whitespace between # and stage
         private const string StageToken = "#stage";
 
 
@@ -150,11 +151,12 @@ namespace HazelShaders
                 int begin = stageTokenPos + StageToken.Length;
                 string stageString = shaderSource.Substring(begin, eol - begin);
                 stageString = stageString.Trim();
+                if (stageString.Length == 0)
+                    break;
 
                 stageString = stageString.ToLower();
                 char firstChar = Char.ToUpper(stageString[0]);
                 stageString = stageString.Remove(0, 1).Insert(0, firstChar.ToString());
-
                 if (!Enum.TryParse<ShaderStage>(stageString, out var stage))
                     continue;
 
@@ -162,6 +164,9 @@ namespace HazelShaders
 
                 // Add token to dictionary
                 outStageTokens.Add(stage, new ShaderStageToken(stage, stageTokenPos, eol - 1 - stageTokenPos));
+
+                if (nextLinePos == -1)
+                    break;
 
                 stageTokenPos = shaderSource.IndexOf(StageToken, nextLinePos);
 

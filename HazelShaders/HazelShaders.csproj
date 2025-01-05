@@ -73,9 +73,9 @@
     <Compile Include="Source\TodoClassification\TodoGlyphFactoryProvider.cs" />
     <Compile Include="Source\TodoClassification\TodoTagger.cs" />
     <Compile Include="Source\TodoClassification\TodoTaggerProvider.cs" />
-    <Compile Include="Source\Tokenizer\Token.cs" />
     <Compile Include="Source\Tokenizer\Tokenizer.cs" />
     <Compile Include="Source\Intellisense\GlslQuickInfo.cs" />
+    <Compile Include="Source\Utils\GlslangValidator.cs" />
     <Compile Include="Source\Utils\StringUtils.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -97,6 +97,9 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="FuzzySharp">
+      <Version>2.0.2</Version>
+    </PackageReference>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.32112.339" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.2069" />
     <PackageReference Include="Sprache">
@@ -120,6 +123,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
+    <Content Include="Source\Specification\BaseTypes.txt" />
     <Content Include="Source\Specification\BuiltInConstants.txt" />
     <Content Include="Source\Specification\BuiltInFunctions.txt" />
     <Content Include="Source\Specification\BuiltInVariables.txt" />

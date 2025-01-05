@@ -20,9 +20,8 @@ namespace HazelShaders
             if (ShaderSourceMap.TryGetValue(hashCode, out var cachedSource))
                 return cachedSource;
 
-            string vulkanSdkPathStr = Environment.GetEnvironmentVariable("VULKAN_SDK");
-            string glslangValidatorPath = Path.Combine(vulkanSdkPathStr, "Bin/glslangValidator.exe");
-            if (!File.Exists(glslangValidatorPath))
+            var glslangValidatorPath = GlslangValidator.GetGlslangValidatorPath();
+            if (glslangValidatorPath.Length == 0)
                 return "";
 
             var sources = ShaderPreprocessor.RemoveCommentsAndSplitSourceCode(span.GetText(), out var stageTokenPositions);

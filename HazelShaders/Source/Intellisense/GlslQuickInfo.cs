@@ -53,7 +53,7 @@ namespace HazelShaders
 
             foreach (var kvp in GlslSpecification.KeywordMap)
             {
-                if (kvp.Value == TokenType.Function)
+                if (kvp.Value == TokenType.FunctionName)
                 {
                     var functionInfo = GlslFunctions.GetFunctionInfo(kvp.Key);
                     if (functionInfo != null)

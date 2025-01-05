@@ -9,6 +9,7 @@ namespace HazelShaders
         public const string Keyword = nameof(GLSL_Keyword);
         public const string Function = nameof(GLSL_Function);
         public const string Variable = nameof(GLSL_Variable);
+        public const string TypeName = nameof(GLSL_TypeName);
         public const string Statement = nameof(GLSL_Statement);
 
         [Export]
@@ -22,6 +23,10 @@ namespace HazelShaders
         [Export]
         [Name(Variable)]
         private static ClassificationTypeDefinition GLSL_Variable;
+
+        [Export]
+        [Name(TypeName)]
+        private static ClassificationTypeDefinition GLSL_TypeName;
 
         [Export]
         [Name(Statement)]

@@ -30,7 +30,7 @@ namespace HazelShaders
             Debug.Assert(glyphService != null);
 
             GlyphMap[TokenType.Keyword] = glyphService.GetGlyph(StandardGlyphGroup.GlyphKeyword, StandardGlyphItem.GlyphItemPublic);
-            GlyphMap[TokenType.Function] = glyphService.GetGlyph(StandardGlyphGroup.GlyphGroupMethod, StandardGlyphItem.GlyphItemPublic);
+            GlyphMap[TokenType.FunctionName] = glyphService.GetGlyph(StandardGlyphGroup.GlyphGroupMethod, StandardGlyphItem.GlyphItemPublic);
             GlyphMap[TokenType.Variable] = glyphService.GetGlyph(StandardGlyphGroup.GlyphGroupVariable, StandardGlyphItem.GlyphItemPublic);
             GlyphMap[TokenType.Identifier] = glyphService.GetGlyph(StandardGlyphGroup.GlyphGroupVariable, StandardGlyphItem.GlyphItemFriend);
 

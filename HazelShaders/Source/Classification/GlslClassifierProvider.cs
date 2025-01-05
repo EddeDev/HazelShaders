@@ -42,9 +42,22 @@ namespace HazelShaders
             m_ClassificationTypes[TokenType.PreprocessorKeyword] = registry.GetClassificationType(PredefinedClassificationTypeNames.PreprocessorKeyword);
 
             m_ClassificationTypes[TokenType.Keyword] = registry.GetClassificationType(GlslClassificationTypes.Keyword);
-            m_ClassificationTypes[TokenType.Function] = registry.GetClassificationType(GlslClassificationTypes.Function);
             m_ClassificationTypes[TokenType.Variable] = registry.GetClassificationType(GlslClassificationTypes.Variable);
             m_ClassificationTypes[TokenType.Statement] = registry.GetClassificationType(GlslClassificationTypes.Statement);
+
+            m_ClassificationTypes[TokenType.FunctionName] = registry.GetClassificationType(GlslClassificationTypes.Function);
+            m_ClassificationTypes[TokenType.MissingFunctionName] = registry.GetClassificationType(PredefinedClassificationTypeNames.Identifier);
+
+            // TODO: WIP 
+            // m_ClassificationTypes[TokenType.StructName] = registry.GetClassificationType(GlslClassificationTypes.TypeName);
+            m_ClassificationTypes[TokenType.TypeName] = registry.GetClassificationType(GlslClassificationTypes.TypeName);
+            m_ClassificationTypes[TokenType.BaseTypeName] = registry.GetClassificationType(GlslClassificationTypes.Keyword);
+
+            // TODO: WIP WIP WIP
+            m_ClassificationTypes[TokenType.Identifier] = registry.GetClassificationType(GlslClassificationTypes.Variable);
+
+            // Idk about this
+            m_ClassificationTypes[TokenType.Qualifier] = registry.GetClassificationType(GlslClassificationTypes.Keyword);
         }
 
         public IClassifier GetClassifier(ITextBuffer textBuffer)
@@ -54,12 +67,17 @@ namespace HazelShaders
 
         public IList<ClassificationSpan> CalculateSpans(SnapshotSpan span)
         {
+
+            string filepath = null;
+            if (span.Snapshot.TextBuffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument document))
+                filepath = document.FilePath;
+
             IList<ClassificationSpan> classificationSpans = new List<ClassificationSpan>();
             string source = span.GetText();
-            var tokens = m_Tokenizer.Tokenize(source);
+            var tokens = m_Tokenizer.Tokenize(source, filepath);
             foreach (var token in tokens)
             {
-                var tokenSpan = new SnapshotSpan(span.Snapshot, token.Start, token.Length);
+                var tokenSpan = new SnapshotSpan(span.Snapshot, token.StartPos.Pos, token.Length);
                 var classificationType = m_ClassificationTypes[token.Type];
                 classificationSpans.Add(new ClassificationSpan(tokenSpan, classificationType));
             }

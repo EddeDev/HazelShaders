@@ -16,12 +16,7 @@ namespace HazelShaders
 			return TokenType.Identifier;
 		}
 
-		public static void AddKeyword(string keyword, TokenType tokenType)
-        {
-            KeywordMap.Add(keyword, tokenType);
-        }
-
-        private static Dictionary<string, TokenType> Init()
+		private static Dictionary<string, TokenType> Init()
 		{
 			char[] blanks = { ' ', '\n', '\r' };
 
@@ -563,7 +558,6 @@ xfb_offset
 xfb_stride".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 			string[] types = @"accelerationStructureEXT
 atomic_uint
-bool
 bvec2
 bvec3
 bvec4
@@ -583,7 +577,6 @@ double
 dvec2
 dvec3
 dvec4
-float
 iimage1D
 iimage1DArray
 iimage2D
@@ -606,7 +599,6 @@ image3D
 imageBuffer
 imageCube
 imageCubeArray
-int
 isampler1D
 isampler1DArray
 isampler2D
@@ -663,7 +655,6 @@ uimage3D
 uimageBuffer
 uimageCube
 uimageCubeArray
-uint
 usampler1D
 usampler1DArray
 usampler2D
@@ -680,7 +671,11 @@ uvec3
 uvec4
 vec2
 vec3
-vec4
+vec4".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] baseTypes = @"bool
+float
+int
+uint
 void".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 
 			string[] additionalKeywords = { 
@@ -689,7 +684,14 @@ void".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 				"compute", 
 				"geometry",
 
-				"struct"
+				"struct",
+
+				"core"
+			};
+
+			string[] additionalQualifiers = { 
+				"set",
+				"push_constant"
 			};
 
 			string[] controlKeywords = {
@@ -706,11 +708,18 @@ void".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 				"discard"
 			};
 
+			string[] additionalFunctions = {
+				"main"
+			};
+
 			var tokenTypeToKeywords = new Dictionary<TokenType, IList<string[]>>();
             // TODO: join?
-            tokenTypeToKeywords[TokenType.Keyword] = new List<string[]>() { qualifiers, types, additionalKeywords };
+            tokenTypeToKeywords[TokenType.Keyword] = new List<string[]>() { additionalKeywords };
+            tokenTypeToKeywords[TokenType.TypeName] = new List<string[]>() { types };
+            tokenTypeToKeywords[TokenType.BaseTypeName] = new List<string[]>() { baseTypes };
+			tokenTypeToKeywords[TokenType.Qualifier] = new List<string[]>() { qualifiers, additionalQualifiers };
             tokenTypeToKeywords[TokenType.Variable] = new List<string[]>() { builtInVariables, builtInConstants };
-            tokenTypeToKeywords[TokenType.Function] = new List<string[]>() { builtInFunctions };
+            tokenTypeToKeywords[TokenType.FunctionName] = new List<string[]>() { builtInFunctions, additionalFunctions };
             tokenTypeToKeywords[TokenType.Statement] = new List<string[]>() { controlKeywords };
 
             var result = new Dictionary<string, TokenType>();

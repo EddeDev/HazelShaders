@@ -48,6 +48,20 @@ namespace HazelShaders
     }
 
     [Export(typeof(EditorFormatDefinition))]
+    [ClassificationType(ClassificationTypeNames = GlslClassificationTypes.TypeName)]
+    [Name(nameof(GlslTypeNameClassifierFormat))]
+    [UserVisible(true)]
+    [Order(Before = Priority.Default)]
+    internal sealed class GlslTypeNameClassifierFormat : ClassificationFormatDefinition
+    {
+        public GlslTypeNameClassifierFormat()
+        {
+            DisplayName = "GLSL TypeName";
+            ForegroundColor = ColorConverter.ConvertFromString("#FFD700") as Color?;
+        }
+    }
+
+    [Export(typeof(EditorFormatDefinition))]
     [ClassificationType(ClassificationTypeNames = GlslClassificationTypes.Statement)]
     [Name(nameof(GlslStatementClassifierFormat))]
     [UserVisible(true)]

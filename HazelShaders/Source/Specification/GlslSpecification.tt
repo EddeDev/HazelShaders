@@ -32,6 +32,7 @@ namespace HazelShaders
 			string[] builtInVariables = @"<#=ReadFile("BuiltInVariables.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 			string[] qualifiers = @"<#=ReadFile("Qualifiers.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 			string[] types = @"<#=ReadFile("Types.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
+			string[] baseTypes = @"<#=ReadFile("BaseTypes.txt")#>".Split(blanks, StringSplitOptions.RemoveEmptyEntries);
 
 			string[] additionalKeywords = { 
 				"vertex", 
@@ -39,7 +40,14 @@ namespace HazelShaders
 				"compute", 
 				"geometry",
 
-				"struct"
+				"struct",
+
+				"core"
+			};
+
+			string[] additionalQualifiers = { 
+				"set",
+				"push_constant"
 			};
 
 			string[] controlKeywords = {
@@ -56,11 +64,18 @@ namespace HazelShaders
 				"discard"
 			};
 
+			string[] additionalFunctions = {
+				"main"
+			};
+
 			var tokenTypeToKeywords = new Dictionary<TokenType, IList<string[]>>();
             // TODO: join?
-            tokenTypeToKeywords[TokenType.Keyword] = new List<string[]>() { qualifiers, types, additionalKeywords };
+            tokenTypeToKeywords[TokenType.Keyword] = new List<string[]>() { additionalKeywords };
+            tokenTypeToKeywords[TokenType.TypeName] = new List<string[]>() { types };
+            tokenTypeToKeywords[TokenType.BaseTypeName] = new List<string[]>() { baseTypes };
+			tokenTypeToKeywords[TokenType.Qualifier] = new List<string[]>() { qualifiers, additionalQualifiers };
             tokenTypeToKeywords[TokenType.Variable] = new List<string[]>() { builtInVariables, builtInConstants };
-            tokenTypeToKeywords[TokenType.Function] = new List<string[]>() { builtInFunctions };
+            tokenTypeToKeywords[TokenType.FunctionName] = new List<string[]>() { builtInFunctions, additionalFunctions };
             tokenTypeToKeywords[TokenType.Statement] = new List<string[]>() { controlKeywords };
 
             var result = new Dictionary<string, TokenType>();
