@@ -55,6 +55,7 @@ namespace HazelShaders
 
             // TODO: WIP WIP WIP
             m_ClassificationTypes[TokenType.Identifier] = registry.GetClassificationType(GlslClassificationTypes.Variable);
+            m_ClassificationTypes[TokenType.MissingIdentifier] = registry.GetClassificationType(PredefinedClassificationTypeNames.Identifier);
 
             // Idk about this
             m_ClassificationTypes[TokenType.Qualifier] = registry.GetClassificationType(GlslClassificationTypes.Keyword);
@@ -67,7 +68,6 @@ namespace HazelShaders
 
         public IList<ClassificationSpan> CalculateSpans(SnapshotSpan span)
         {
-
             string filepath = null;
             if (span.Snapshot.TextBuffer.Properties.TryGetProperty(typeof(ITextDocument), out ITextDocument document))
                 filepath = document.FilePath;

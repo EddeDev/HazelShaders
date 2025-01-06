@@ -16,6 +16,7 @@ namespace HazelShaders
         QuotedString,
         Number,
         Identifier,
+        MissingIdentifier,
         Operator,
         NewLine,
 
@@ -39,6 +40,11 @@ namespace HazelShaders
         public static bool IsFunctionName(this TokenType type)
         {
             return type == TokenType.FunctionName || type == TokenType.MissingFunctionName;
+        }
+
+        public static bool IsIdentifier(this TokenType type)
+        {
+            return type == TokenType.Identifier || type == TokenType.MissingIdentifier;
         }
     }
 
@@ -74,6 +80,14 @@ namespace HazelShaders
         }
     }
 
+    static class TokenExtensions
+    {
+        public static bool HasTypeAndValue(this Token token, TokenType type, string value)
+        {
+            return token.Type == type && token.Value == value;
+        }
+    }
+
     internal class PreprocessorToken : Token
     {
         public string DirectiveType { get; private set; }
@@ -98,11 +112,12 @@ namespace HazelShaders
 
     static class ParserExtensions
     {
-        public static T Update<T>(this T token, Tokenizer tokenizer) where T : Token
+        public static T Update<T>(this T token, Tokenizer tokenizer, bool updatePreviousToken = true) where T : Token
         {
             token = tokenizer.OnParseToken(token);
             token.PreviousToken = tokenizer.PreviousToken;
-            tokenizer.PreviousToken = token;
+            if (updatePreviousToken)
+                tokenizer.PreviousToken = token;
             return token;
         }
     }
@@ -128,30 +143,41 @@ namespace HazelShaders
 
         // TODO: layout qualifiers
         public List<string> LocalStructNames { get; private set; }
-        public List<string> LocalFunctionNames { get; private set; }
 
-        public struct LocalVariable
+        public struct Variable
         {
             public string Name { get; set; }
             public int StackDepth { get; set; }
         }
-        public List<LocalVariable> LocalVariables { get; private set; }
+        public List<Variable> LocalVariables { get; private set; }
+        public struct Uniform
+        {
+            public string Name { get; set; }
+            public int StackDepth { get; set; }
+        }
+        public List<Uniform> LocalUniforms { get; private set; }
 
-        private int m_CurrentStackDepth = 0;
+        public class Function
+        {
+            public string Name { get; set; }
+            public Token OpenParen { get; set; }
+            public Token CloseParen { get; set; }
+        }
+        public List<Function> LocalFunctions { get; private set; }
+
+        private int m_CurrentScopeDepth = 0;
         private int m_CurrentLineNumber = 0;
 
-        // Just for debugging
-        private bool m_IsRoot = false;
+        private int m_CurrentFunctionIndex = -1;
 
         private string m_Filepath { get; set; }
 
-        public Tokenizer(bool isRoot = true)
+        public Tokenizer()
         {
-            m_IsRoot = isRoot;
-
             LocalStructNames = new List<string>();
-            LocalFunctionNames = new List<string>();
-            LocalVariables = new List<LocalVariable>();
+            LocalFunctions = new List<Function>();
+            LocalVariables = new List<Variable>();
+            LocalUniforms = new List<Uniform>();
             PreviousToken = null;
 
             Parser<Token> token = null;
@@ -170,10 +196,12 @@ namespace HazelShaders
         public List<IToken> Tokenize(string text, string filepath)
         {
             LocalStructNames.Clear();
-            LocalFunctionNames.Clear();
+            LocalFunctions.Clear();
             LocalVariables.Clear();
+            LocalUniforms.Clear();
             PreviousToken = null;
-            m_CurrentStackDepth = 0;
+            m_CurrentScopeDepth = 0;
+            m_CurrentFunctionIndex = -1;
             m_CurrentLineNumber = 1; // TODO
             m_Filepath = filepath;
 
@@ -191,7 +219,7 @@ namespace HazelShaders
             {
                 case TokenType.Comment:
                     parser = from value in new CommentParser().AnyComment
-                             select new Token(TokenType.Comment, value).Update(this);
+                             select new Token(TokenType.Comment, value); //.Update(this, false);
                     break;
                
                 case TokenType.PreprocessorKeyword:
@@ -223,7 +251,7 @@ namespace HazelShaders
                 case TokenType.NewLine:
                     parser = from carriageReturn in Parse.Char('\r').Optional()
                              from newLine in Parse.Char('\n').Optional()
-                             select new NewlineToken(carriageReturn.IsDefined, newLine.IsDefined).Update(this);
+                             select new NewlineToken(carriageReturn.IsDefined, newLine.IsDefined); //.Update(this, false);
                     break;
             }
             return parser;
@@ -248,6 +276,26 @@ namespace HazelShaders
             return token;
         }
 
+        private bool IsKeywordDefinedLocally(string name)
+        {
+            foreach (var variable in LocalVariables)
+            {
+                if (variable.Name == name)
+                    return true;
+            }
+            foreach (var structName in LocalStructNames)
+            {
+                if (structName == name)
+                    return true;
+            }
+            foreach (var function in LocalFunctions)
+            {
+                if (function.Name == name)
+                    return true;
+            }
+            return false;
+        }
+
         private T OnParseIdentifier<T>(T token) where T : Token
         {
             if (PreviousToken == null)
@@ -256,6 +304,11 @@ namespace HazelShaders
                 return token;
             }
 
+            // Example:
+            //
+            // #endif
+            // 
+            //
             if (PreviousToken.Type == TokenType.PreprocessorKeyword)
             {
                 PreprocessorToken previousToken = (PreprocessorToken)PreviousToken;
@@ -280,33 +333,58 @@ namespace HazelShaders
                 }
             }
 
+            if (PreviousToken.Type == TokenType.Qualifier)
+            {
+                if (PreviousToken.Value == "uniform")
+                {
+                    token.Type = TokenType.TypeName;
+
+                    Uniform uniform = new Uniform();
+                    uniform.Name = token.Value;
+                    uniform.StackDepth = m_CurrentScopeDepth;
+                    LocalUniforms.Add(uniform);
+                    return token;
+                }
+            }
+
             // Example: DirectionalLight dirLight;
             // "DirectionalLight" is a custom struct (type name)
             // dirLight is a normal identifier
+            // TODO: what about layout qualifiers?
             if (PreviousToken.Type == TokenType.Identifier)
             {
                 if (LocalStructNames.Contains(PreviousToken.Value))
                 {
                     PreviousToken.Type = TokenType.TypeName;
+                }
+            }
+            
+            if (PreviousToken.Type == TokenType.TypeName)
+            {
+                Variable variable = new Variable();
+                variable.Name = token.Value;
+                variable.StackDepth = m_CurrentScopeDepth;
+                LocalVariables.Add(variable);
 
-                    // TODO: what about layout qualifiers?
+                token.Type = TokenType.Identifier;
+                return token;
+            }
 
-                    LocalVariable variable = new LocalVariable();
-                    variable.Name = token.Value;
-                    variable.StackDepth = m_CurrentStackDepth;
-                    LocalVariables.Add(variable);
+            token.Type = GlslSpecification.KeywordToTokenType(token.Value);
 
-                    if (m_IsRoot)
-                    {
-                        Debug.WriteLine("a");
-                    }
+            if (token.Type == TokenType.Identifier)
+            {
+                if (!IsKeywordDefinedLocally(token.Value))
+                {
+                    token.Type = TokenType.MissingIdentifier;
                 }
             }
 
-            TokenType currentTokenType = GlslSpecification.KeywordToTokenType(token.Value);
-            if (currentTokenType != TokenType.Identifier && PreviousToken.Type.IsTypeName())
-                currentTokenType = TokenType.Identifier;
-            token.Type = currentTokenType;
+            // Example: vec2 imageSize;
+            // "imageSize" is a built in function but GLSL allows you
+            // to write code like this
+            if (!token.Type.IsIdentifier() && PreviousToken.Type.IsTypeName())
+                token.Type = TokenType.Identifier;
             return token;
         }
 
@@ -329,11 +407,13 @@ namespace HazelShaders
                     {
                         string includeContent = File.ReadAllText(includePath);
 
-                        Tokenizer tokenizer = new Tokenizer(false);
+                        Tokenizer tokenizer = new Tokenizer();
                         tokenizer.Tokenize(includeContent, includePath);
 
                         LocalStructNames.AddRange(tokenizer.LocalStructNames);
-                        LocalFunctionNames.AddRange(tokenizer.LocalFunctionNames);
+                        LocalFunctions.AddRange(tokenizer.LocalFunctions);
+                        LocalVariables.AddRange(tokenizer.LocalVariables);
+                        LocalUniforms.AddRange(tokenizer.LocalUniforms);
                     }
 
                     return token;
@@ -343,17 +423,124 @@ namespace HazelShaders
             return token;
         }
 
+        private static bool SkipAllCommentsAndNewlines(ref Token t)
+        {
+            bool skipped = false;
+            while (true)
+            {
+                if (t == null || (t.Type != TokenType.Comment && t.Type != TokenType.NewLine))
+                    break;
+                t = t.PreviousToken;
+                skipped = true;
+            }
+            return skipped;
+        }
+
+        private static IEnumerable<Token> ExtractFunctionParameters(Token openParenToken, Token closeParenToken)
+        {
+            List<Token> tokens = new List<Token>();
+            if (openParenToken == null || closeParenToken == null)
+                return tokens;
+
+            var it = closeParenToken;
+            while (it != openParenToken)
+            {
+                if (it != openParenToken && it != closeParenToken)
+                    tokens.Add(it);
+                it = it.PreviousToken;
+            }
+
+            tokens.Reverse();
+            return tokens;
+        }
+
+        private Function GetCurrentFunction()
+        {
+            if (m_CurrentFunctionIndex == -1)
+                return null;
+
+            if (m_CurrentFunctionIndex >= LocalFunctions.Count)
+                return null;
+
+            return LocalFunctions.ElementAt(m_CurrentFunctionIndex);
+        }
+
         private T OnParseOperator<T>(T token) where T : Token
         {
             if (token.Value == "{")
             {
-                m_CurrentStackDepth++;
+                m_CurrentScopeDepth++;
+
+                if (m_CurrentScopeDepth == 1 && m_CurrentFunctionIndex == -1)
+                {
+                    Token openParen = null;
+                    Token closeParen = null;
+
+                    var it = PreviousToken;
+                    while (it != null)
+                    {
+                        SkipAllCommentsAndNewlines(ref it);
+                        if (it == null)
+                            break;
+
+                        if (closeParen == null && it.HasTypeAndValue(TokenType.Operator, ")"))
+                        {
+                            closeParen = it;
+                        }
+                        else if (openParen == null && it.HasTypeAndValue(TokenType.Operator, "("))
+                        {
+                            openParen = it;
+                        }
+                        else if (openParen != null && closeParen != null)
+                        {
+                            if (it.Type == TokenType.FunctionName)
+                            {
+                                Function function = LocalFunctions.Find((f) => { return f.Name == it.Value; });
+                                if (function != null)
+                                {
+                                    var parameters = ExtractFunctionParameters(openParen, closeParen);
+
+                                    function.OpenParen = openParen;
+                                    function.CloseParen = closeParen;
+
+                                    m_CurrentFunctionIndex = LocalFunctions.IndexOf(function);
+                                }
+
+                                return token;
+                            }
+                        }
+
+                        it = it.PreviousToken;
+                    }
+
+                    it = PreviousToken;
+                    while (it != null)
+                    {
+                        SkipAllCommentsAndNewlines(ref it);
+                        if (it == null)
+                            break;
+
+                        Debug.WriteLine("a");
+
+                        it = it.PreviousToken;
+                    }
+                }
+
                 return token;
             }
 
             if (token.Value == "}")
             {
-                m_CurrentStackDepth--;
+                if (m_CurrentScopeDepth == 1)
+                {
+                    if (m_CurrentFunctionIndex != -1)
+                    {
+                        // End of function
+                        m_CurrentFunctionIndex = -1;
+                    }
+                }
+
+                m_CurrentScopeDepth--;
                 return token;
             }
 
@@ -376,14 +563,20 @@ namespace HazelShaders
                         if (PreviousToken.PreviousToken.Type.IsTypeName())
                         {
                             PreviousToken.Type = TokenType.FunctionName;
-                            LocalFunctionNames.Add(PreviousToken.Value);
+
+
+                            Function function = new Function();
+                            function.Name = PreviousToken.Value;
+                            LocalFunctions.Add(function);
+
                             return token;
                         }
 
                         // Function call
                         if (PreviousToken.PreviousToken.Type == TokenType.Operator)
                         {
-                            if (LocalFunctionNames.Contains(PreviousToken.Value))
+                            Function function = LocalFunctions.Find((f) => { return f.Name == PreviousToken.Value; });
+                            if (function != null)
                             {
                                 PreviousToken.Type = TokenType.FunctionName;
                                 return token;
